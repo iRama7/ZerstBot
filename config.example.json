@@ -1,0 +1,6 @@
+{
+  "memeChannelId": 123,
+  "guildID": 123,
+  "upvoteEmojiCode": "⬆️",
+  "memeCooldownSeconds": 604800
+}
