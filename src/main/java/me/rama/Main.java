@@ -8,9 +8,11 @@ import me.rama.bot.MessageListener;
 import me.rama.db.Database;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
+import net.dv8tion.jda.api.OnlineStatus;
 import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.components.buttons.Button;
 import net.dv8tion.jda.api.components.buttons.ButtonStyle;
+import net.dv8tion.jda.api.entities.Activity;
 import net.dv8tion.jda.api.entities.emoji.Emoji;
 import net.dv8tion.jda.api.interactions.commands.DefaultMemberPermissions;
 import net.dv8tion.jda.api.interactions.commands.OptionType;
@@ -27,6 +29,11 @@ import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.sql.SQLException;
 import java.util.EnumSet;
+import java.util.List;
+import java.util.Random;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 
 public class Main {
@@ -39,6 +46,15 @@ public class Main {
     private static Config config;
     public static Button upButton;
     public static MessageListener messageListener;
+
+    private static final List<Activity> activities = List.of(
+            Activity.customStatus("Viendo #memes"),
+            Activity.customStatus("Intentando banear a palfer"),
+            Activity.customStatus("Escuchando las vendidas de humo de Zerst"),
+            Activity.customStatus("Que memes de mierda que mandan estos mortales"),
+            Activity.customStatus("Desinstalándole el WoW a Zerst"),
+            Activity.streaming("Viendo ZerstGaming en twitch!", "https://twitch.tv/zerstgaming")
+    );
 
 
     public static void main(String[] args) {
@@ -63,12 +79,15 @@ public class Main {
             jda = JDABuilder.createDefault(token, EnumSet.of(GatewayIntent.GUILD_MESSAGES, GatewayIntent.MESSAGE_CONTENT))
                     .addEventListeners(messageListener, buttonListener, commandsListener)
                     .disableCache(CacheFlag.VOICE_STATE, CacheFlag.EMOJI, CacheFlag.STICKER, CacheFlag.SOUNDBOARD_SOUNDS, CacheFlag.SCHEDULED_EVENTS)
+                    .setStatus(OnlineStatus.DO_NOT_DISTURB)
                     .build();
             try {
                 jda.awaitReady();
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
+
+            startActivityRotation(jda);
 
             try {
                 db = new Database(getJarDirectory() + "/database.db");
@@ -135,6 +154,22 @@ public class Main {
                 .setDefaultPermissions(DefaultMemberPermissions.enabledFor(Permission.MODERATE_MEMBERS));
 
         jda.updateCommands().addCommands(leaderboardCommand, resetCooldownCommand).queue();
+    }
+
+
+    public static void startActivityRotation(JDA jda) {
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+
+        scheduler.scheduleAtFixedRate(() -> {
+            try {
+                Activity next = activities.get(new Random().nextInt(activities.size()));
+
+                jda.getPresence().setActivity(next);
+
+            } catch (Exception e) {
+                LOGGER.warn("Error rotando actividad: {}" , e.getMessage());
+            }
+        }, 0, 1, TimeUnit.HOURS);
     }
 
 
