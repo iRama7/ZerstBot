@@ -36,17 +36,39 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 
+/**
+ * ZerstBot — Punto de entrada del bot de Discord para gestión de memes.
+ * <p>
+ * Inicializa JDA (Java Discord API), conecta la base de datos SQLite,
+ * registra los listeners de eventos y los comandos slash, y arranca
+ * la rotación periódica de actividad/estado.
+ */
 public class Main {
 
     private static final Logger LOGGER =
             LoggerFactory.getLogger(Main.class);
 
+    // ──────────────────────────────────────────────────────────────
+    // Singletons globales (accesibles desde cualquier listener)
+    // NOTA: sería mejor inyectarlos, pero se usan estáticos por simplicidad.
+    // ──────────────────────────────────────────────────────────────
+
+    /** Instancia de JDA (conexión con Discord). */
     public static JDA jda;
+
+    /** Conexión a la base de datos SQLite. */
     public static Database db;
+
+    /** Configuración cargada desde config.json. */
     private static Config config;
+
+    /** Botón de upvote que se adjunta a cada embed de meme. */
     public static Button upButton;
+
+    /** Referencia al listener de mensajes (necesaria para el override de cooldown). */
     public static MessageListener messageListener;
 
+    /** Lista de actividades/estados que se rotan cada hora. */
     private static final List<Activity> activities = List.of(
             Activity.customStatus("Viendo #memes"),
             Activity.customStatus("Intentando banear a palfer"),
@@ -61,6 +83,7 @@ public class Main {
 
         LOGGER.info("Starting ZerstBot...");
 
+        // ── 1. Cargar configuración ──────────────────────────────
         try {
             config = Config.load(Path.of(getJarDirectory(), "config.json"));
         } catch (IOException e) {
@@ -68,16 +91,21 @@ public class Main {
             return;
         }
 
+        // ── 2. Obtener token desde .env ──────────────────────────
         String token = getToken();
         if (token == null) {
             LOGGER.error("[Error] Token may not be null");
-        }else {
+        } else {
 
+            // ── 3. Crear listeners ───────────────────────────────
             messageListener = new MessageListener(config);
             ButtonListener buttonListener = new ButtonListener(config);
             Commands commandsListener = new Commands(config);
+
+            // ── 4. Construir y conectar JDA ──────────────────────
             jda = JDABuilder.createDefault(token, EnumSet.of(GatewayIntent.GUILD_MESSAGES, GatewayIntent.MESSAGE_CONTENT))
                     .addEventListeners(messageListener, buttonListener, commandsListener)
+                    // Deshabilitar caches que no usamos para ahorrar memoria
                     .disableCache(CacheFlag.VOICE_STATE, CacheFlag.EMOJI, CacheFlag.STICKER, CacheFlag.SOUNDBOARD_SOUNDS, CacheFlag.SCHEDULED_EVENTS)
                     .setStatus(OnlineStatus.DO_NOT_DISTURB)
                     .build();
@@ -87,14 +115,17 @@ public class Main {
                 throw new RuntimeException(e);
             }
 
+            // ── 5. Arrancar rotación de estado ───────────────────
             startActivityRotation(jda);
 
+            // ── 6. Conectar base de datos SQLite ─────────────────
             try {
                 db = new Database(getJarDirectory() + "/database.db");
-            }catch (SQLException e){
+            } catch (SQLException e) {
                 LOGGER.error("Could not connect to database: {}", e.getMessage());
             }
 
+            // ── 7. Inicializar componentes ───────────────────────
             upButton = getUpButton();
             buttonListener.init();
             messageListener.init();
@@ -103,20 +134,27 @@ public class Main {
         }
     }
 
-    public static String getToken(){
+    /**
+     * Lee el token de Discord desde un archivo .env usando dotenv.
+     * La variable debe llamarse ZERSTBOT_TOKEN.
+     */
+    public static String getToken() {
         String token = null;
         try {
             Dotenv dotenv = Dotenv.configure()
                     .directory(getJarDirectory())
                     .load();
             token = dotenv.get("ZERSTBOT_TOKEN");
-        }catch (DotenvException e) {
+        } catch (DotenvException e) {
             LOGGER.error("[Error] Dotenv loading failed {}", e.getMessage());
         }
         return token;
     }
 
-
+    /**
+     * Obtiene el directorio donde está el JAR en ejecución.
+     * Se usa para resolver rutas relativas de config.json, .env y database.db.
+     */
     public static String getJarDirectory() {
         try {
             File jarFile = new File(
@@ -132,18 +170,27 @@ public class Main {
         }
     }
 
-    private static Button getUpButton(){
+    /**
+     * Construye el botón de upvote que se muestra en cada embed de meme.
+     * Usa el emoji configurado en config.json, o un cuadro negro (⬛) por defecto.
+     */
+    private static Button getUpButton() {
         Emoji upVoteEmoji = Emoji.fromFormatted("⬛");
         try {
             upVoteEmoji = Emoji.fromFormatted(config.getUpvoteEmojiCode());
-        }catch (IllegalArgumentException e){
+        } catch (IllegalArgumentException e) {
             LOGGER.error("Could not retrieve upvote emoji from config.json: {}", e.getMessage());
         }
 
         return Button.of(ButtonStyle.SECONDARY, "upButton", "0", upVoteEmoji);
     }
 
-    private static void registerCommands(){
+    /**
+     * Registra los comandos slash globales del bot:
+     * - /top (periodo: weekly | alltime) — leaderboard de memes
+     * - /cd @usuario — resetea el cooldown de un usuario (solo moderadores)
+     */
+    private static void registerCommands() {
         CommandData leaderboardCommand = net.dv8tion.jda.api.interactions.commands.build.Commands.slash("top", "Muestra el top de memes")
                 .addOptions(new OptionData(OptionType.STRING, "periodo", "Periodo de tiempo", true)
                         .addChoice("Semanal", "weekly")
@@ -156,7 +203,10 @@ public class Main {
         jda.updateCommands().addCommands(leaderboardCommand, resetCooldownCommand).queue();
     }
 
-
+    /**
+     * Arranca un scheduler que cambia el "Ahora jugando..." del bot cada hora
+     * con mensajes aleatorios de la lista {@link #activities}.
+     */
     public static void startActivityRotation(JDA jda) {
         ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 
@@ -167,11 +217,10 @@ public class Main {
                 jda.getPresence().setActivity(next);
 
             } catch (Exception e) {
-                LOGGER.warn("Error rotando actividad: {}" , e.getMessage());
+                LOGGER.warn("Error rotando actividad: {}", e.getMessage());
             }
         }, 0, 1, TimeUnit.HOURS);
     }
-
 
 
 }

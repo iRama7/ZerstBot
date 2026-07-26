@@ -8,15 +8,33 @@ import java.io.Reader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-
+/**
+ * Configuración del bot, deserializada desde config.json mediante Gson.
+ * <p>
+ * Los campos se mapean automáticamente desde el JSON por nombre.
+ * Ver config.example.json para la estructura esperada.
+ */
 public class Config {
 
+    /** ID del canal de Discord donde se publican los memes. */
     private long memeChannelId;
+
+    /** ID del servidor (guild) principal. */
     private long guildID;
+
+    /** Código del emoji personalizado para el botón de upvote (ej: "⬆️" o "<:emoji:1234>"). */
     private String upvoteEmojiCode;
+
+    /** Tiempo de espera en segundos entre publicaciones de un mismo usuario. */
     private long memeCooldownSeconds;
 
-
+    /**
+     * Carga la configuración desde un archivo JSON.
+     *
+     * @param configPath Ruta al archivo config.json.
+     * @return Instancia de Config con los valores parseados.
+     * @throws IOException Si el archivo no existe, está vacío o el JSON es inválido.
+     */
     public static Config load(Path configPath) throws IOException {
         try (Reader reader = Files.newBufferedReader(configPath)) {
             Config config = new Gson().fromJson(reader, Config.class);
@@ -31,12 +49,6 @@ public class Config {
         }
     }
 
-    private void validate() throws IOException {
-        if (memeChannelId <= 0 || guildID <= 0) {
-            throw new IOException("ChannelId must be a valid channel ID.");
-        }
-    }
-
     public long getMemeChannelId() {
         return memeChannelId;
     }
@@ -45,9 +57,7 @@ public class Config {
         return guildID;
     }
 
-
     public String getUpvoteEmojiCode() {
-
         return upvoteEmojiCode;
     }
 
