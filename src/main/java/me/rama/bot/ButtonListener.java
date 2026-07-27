@@ -78,6 +78,9 @@ public class ButtonListener extends ListenerAdapter {
 
         User user = event.getUser();
         User memeAuthor = jda.getUserById(meme.getAuthorId());
+        if(memeAuthor == null) {
+            memeAuthor = jda.retrieveUserById(meme.getAuthorId()).complete();
+        }
 
         // ── No permitir votar el propio meme ──────────────────
         if (user.equals(memeAuthor)) {
