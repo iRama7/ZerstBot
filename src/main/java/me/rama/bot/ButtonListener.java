@@ -76,37 +76,35 @@ public class ButtonListener extends ListenerAdapter {
             return;
         }
 
-        User user = event.getUser();
-        User memeAuthor = jda.getUserById(meme.getAuthorId());
+        long eventUserId = event.getUser().getIdLong();
+        long memeAuthorId = Long.parseLong(meme.getAuthorId());
 
-        // ── No permitir votar el propio meme ──────────────────
-        if (user.equals(memeAuthor)) {
+        if (eventUserId == memeAuthorId) {
             event.reply("No podés votar tu propio meme <:pepow:1280353071267971174>")
                     .setEphemeral(true).queue();
             return;
         }
 
         long messageId = Long.parseLong(message.getId());
-        long userId = event.getUser().getIdLong();
 
         try {
-            boolean hasVoted = db.hasVoted(messageId, userId);
+            boolean hasVoted = db.hasVoted(messageId, eventUserId);
             boolean success;
 
             if (hasVoted) {
                 // ── Ya votó → quitar voto (toggle) ────────────
-                success = db.removeVoteAndDecrement(messageId, userId);
+                success = db.removeVoteAndDecrement(messageId, eventUserId);
                 if (success) {
-                    meme.unVote(userId);
+                    meme.unVote(eventUserId);
                     Button oldButton = event.getButton();
                     Button newButton = oldButton.withLabel(String.valueOf(meme.getVotes()));
                     event.editComponents(ActionRow.of(newButton)).queue();
                 }
             } else {
                 // ── No votó → agregar voto ────────────────────
-                success = db.addVoteAndIncrement(messageId, userId);
+                success = db.addVoteAndIncrement(messageId, eventUserId);
                 if (success) {
-                    meme.vote(userId);
+                    meme.vote(eventUserId);
                     Button oldButton = event.getButton();
                     Button newButton = oldButton.withLabel(String.valueOf(meme.getVotes()));
                     event.editComponents(ActionRow.of(newButton)).queue();
